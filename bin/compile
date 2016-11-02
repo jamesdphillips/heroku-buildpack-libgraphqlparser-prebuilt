@@ -5,20 +5,59 @@ indent() {
 }
 
 echo "--------> Install libgraphqlparser"
+
 BUILD_DIR=$1
 VENDOR_DIR="vendor/libgraphqlparser"
-LIB_TAR="libgraphqlparser-0.5.0.tgz"
-LIB_TAR_PATH="../opt/$LIB_TAR"
+BUILDPACK_DIR="$(dirname $(dirname $0))"
 
-echo "Copying binaries" | indent
-cd $BUILD_DIR
-mkdir -p $VENDOR_DIR
-cd $VENDOR_DIR
+LIB_TAR="libgraphqlparser-0.5.0.tgz"
+LIB_TAR_PATH="$BUILDPACK_DIR/opt/$LIB_TAR"
+
+PROFILE_PATH="$BUILD_DIR/.profile.d/libgraphqlparser.sh"
+EXPORT_PATH="$BUILDPACK_DIR/export"
+BUNDLE_CONFIG_PATH="$BUILD_DIR/.bundle/config"
 
 echo "Extracting binaries" | indent
-tar xvzf $LIB_TAR_PATH
+cd $BUILD_DIR
+mkdir -p $VENDOR_DIR
+tar -C $VENDOR_DIR -xf $LIB_TAR_PATH
 
-echo "exporting PATH and LD_LIBRARY_PATH" | indent
-PROFILE_PATH="$BUILD_DIR/.profile.d/libgraphqlparser.sh"
+echo "exporting LD_LIBRARY_PATH & CPATH" | indent
 mkdir -p $(dirname $PROFILE_PATH)
-echo 'export LD_LIBRARY_PATH="/app/vendor/libgraphqlparser/lib/:$LD_LIBRARY_PATH"' >> $PROFILE_PATH
+echo "export LD_LIBRARY_PATH=\"/app/$VENDOR_DIR/lib:\$LD_LIBRARY_PATH\"" >> $PROFILE_PATH
+echo "export CPATH=\"/app/$VENDOR_DIR/include:\$CPATH\"" >> $PROFILE_PATH
+
+#
+# Make library & headers available for other buildpacks; for instance if you're
+# building a node package or Ruby gem that needs to be compiled against it.
+
+echo "exporting LD_LIBRARY_PATH & CPATH for subsequent buildpacks" | indent
+echo "export LD_LIBRARY_PATH=\"$BUILD_DIR/$VENDOR_DIR/lib:$LD_LIBRARY_PATH\"" >> $EXPORT_PATH
+echo "export CPATH=\"$BUILD_DIR/$VENDOR_DIR/include:$CPATH\"" >> $EXPORT_PATH
+
+#
+# Even with LD_LIBRARY_PATH present the graphql-libgraphqlparser (or Bundler)
+# cannot seem to find the library. As a work around we export the path where
+# the library and headers can be found.
+#
+# NOTE:
+#
+#   Bash does not allow us to export variables that include dashes in their
+#   name. Unfortunately this means that we cannot export the required
+#   environment variable that Bundler expects since the Gem has a dash in it's
+#   name.
+#
+#   To work around this we conditionally create a .bundle/config file and add
+#   the build configuration for the gem.
+#
+
+echo "exporting BUNDLE_BUILD__GRAPHQL-LIBGRAPHQLPARSER for Ruby buildpack" | indent
+
+# Create .bundle/config if it doesn't already exist
+mkdir -p "$BUILD_DIR/.bundle"
+if [ ! -f $BUNDLE_CONFIG_PATH ]; then
+  echo "---" >> $BUNDLE_CONFIG_PATH
+fi
+
+# Add configuration for building gem
+echo "BUNDLE_BUILD__GRAPHQL-LIBGRAPHQLPARSER: \"--with-graphql-include=$BUILD_DIR/$VENDOR_DIR/include/graphqlparser --with-graphql-lib=$BUILD_DIR/$VENDOR_DIR/lib\"" >> $BUILD_DIR/.bundle/config
