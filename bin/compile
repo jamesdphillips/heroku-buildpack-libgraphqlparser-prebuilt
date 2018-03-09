@@ -10,7 +10,7 @@ BUILD_DIR=$1
 VENDOR_DIR="vendor/libgraphqlparser"
 BUILDPACK_DIR="$(dirname $(dirname $0))"
 
-LIB_TAR="libgraphqlparser-0.5.0.tgz"
+LIB_TAR="libgraphqlparser-0.7.0.tgz"
 LIB_TAR_PATH="$BUILDPACK_DIR/opt/$LIB_TAR"
 
 PROFILE_PATH="$BUILD_DIR/.profile.d/libgraphqlparser.sh"
